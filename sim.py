@@ -1,26 +1,32 @@
 import pygame
+import numpy as np
 
 # --- Setup ---
 pygame.init()
-screen = pygame.display.set_mode((600, 600))
-clock = pygame.time.Clock()
 
 # Grid settings
-rows, cols = 10, 10
-cell_size = 60
+rows, cols = 25, 25
+cell_size = 30
+
+
+screen = pygame.display.set_mode((cols*cell_size, rows*cell_size))
+clock = pygame.time.Clock()
+
+
 
 # Define some state colors
 STATE_COLORS = {
     "healthy": (52, 110, 43),
-    "onfire": (0, 255, 0),
-    "burnt": (255, 0, 0)
+    "onfire": (237, 117, 57),
+    "burnt": (31, 15, 11)
 }
 
 # Create a grid with example states
-grid = [
-    ["empty" for _ in range(cols)] for _ in range(rows)
-]
-
+grid = np.array([
+    ["healthy" for _ in range(cols)] for _ in range(rows)
+])
+grid[8:17,8:17] = 'onfire'
+grid[10:15,10:15] = 'burnt'
 # --- Main loop ---
 running = True
 while running:
