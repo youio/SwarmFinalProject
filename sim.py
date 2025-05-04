@@ -39,19 +39,50 @@ def count_fire_neighbors(r, c):
                 count += 1
     return count
 
-def update_grid():
+# def update_grid():
+#     new_grid = grid.copy()
+#     for r in range(rows):
+#         for c in range(cols):
+#             state = grid[r][c]
+#             fire_neighbors = count_fire_neighbors(r, c)
+#             if state == "healthy" and fire_neighbors > 0:
+#                 prob = 1 - (1 - alpha) ** fire_neighbors
+#                 if random.random() < prob:
+#                     new_grid[r][c] = "onfire"
+#             elif state == "onfire":
+#                 if random.random() > beta:
+#                     new_grid[r][c] = "burnt"
+#     return new_grid
+
+def update_grid(wind_vector):
     new_grid = grid.copy()
+    directions = [(-1,0), (1,0), (0,-1), (0,1)]  # Up, Down, Left, Right
+    wind_vector = np.array(wind_vector, dtype=float)
+    wind_vector /= np.linalg.norm(wind_vector) + 1e-8  # normalize
+
     for r in range(rows):
         for c in range(cols):
             state = grid[r][c]
-            fire_neighbors = count_fire_neighbors(r, c)
-            if state == "healthy" and fire_neighbors > 0:
-                prob = 1 - (1 - alpha) ** fire_neighbors
-                if random.random() < prob:
+
+            if state == "healthy":
+                total_prob = 0.0
+                for dr, dc in directions:
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == "onfire":
+                        u = np.array([dr, dc], dtype=float)
+                        u /= np.linalg.norm(u) + 1e-8
+                        proj = np.dot(wind_vector, u)
+                        pw_f = alpha * (1 + proj)
+                        total_prob += pw_f  # sum contributions from all neighbors
+
+                # Probabilistic ignition
+                if random.random() < total_prob:
                     new_grid[r][c] = "onfire"
+
             elif state == "onfire":
                 if random.random() > beta:
                     new_grid[r][c] = "burnt"
+
     return new_grid
 
 # --- Main loop ---
@@ -64,7 +95,8 @@ while running:
 
     # Update every 10 frames
     if tick % 10 == 0:
-        grid = update_grid()
+        # wind_vector: (0,0) none; (1,0) north; (0,1) west; (-1,0) south; (0,-1) east
+        grid = update_grid(wind_vector=(0,-1))
 
     screen.fill((200, 200, 200))
 
