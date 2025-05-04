@@ -5,40 +5,33 @@ import random
 # --- Setup ---
 pygame.init()
 
-# Grid settings
 rows, cols = 25, 25
 cell_size = 30
-
 screen = pygame.display.set_mode((cols*cell_size, rows*cell_size))
 clock = pygame.time.Clock()
 
-# Define some state colors
 STATE_COLORS = {
     "healthy": (52, 110, 43),
     "onfire": (237, 117, 57),
     "burnt": (31, 15, 11)
 }
 
-# Transition parameters
-alpha = 0.4  # susceptibility to catching fire
-beta = 0.6   # chance to stay on fire
+alpha = 0.4
+beta = 0.6
 
-# Create a grid with initial states
 grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
-grid[8:17, 8:17] = 'onfire'
-grid[10:15, 10:15] = 'burnt'
+grid[10:15, 10:15] = 'onfire'
+grid[12:13, 12:13] = 'burnt'
 
-# --- Wildfire update function ---
 def update_grid(wind_vector):
     new_grid = grid.copy()
-    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # Up, Down, Left, Right
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
     wind_vector = np.array(wind_vector, dtype=float)
-    wind_vector /= np.linalg.norm(wind_vector) + 1e-8  # normalize
+    wind_vector /= np.linalg.norm(wind_vector) + 1e-8
 
     for r in range(rows):
         for c in range(cols):
             state = grid[r][c]
-
             if state == "healthy":
                 total_prob = 0.0
                 for dr, dc in directions:
@@ -49,34 +42,37 @@ def update_grid(wind_vector):
                         proj = np.dot(wind_vector, u)
                         pw_f = alpha * (1 + proj)
                         total_prob += pw_f
-
                 if random.random() < total_prob:
                     new_grid[r][c] = "onfire"
-
             elif state == "onfire":
                 if random.random() > beta:
                     new_grid[r][c] = "burnt"
-
     return new_grid
 
-# --- Agent model ---
 class UAVAgent:
-    def __init__(self, pos, cam_size=(5, 5), pc=0.8):
-        self.pos = np.array(pos)
+    def __init__(self, center, radius, angle, direction=1, cam_size=(5, 5), pc=0.8):
+        self.center = np.array(center)
+        self.radius = radius
+        self.angle = angle
+        self.direction = direction
         self.cam_h, self.cam_w = cam_size
         self.pc = pc
-        self.belief = np.full((rows, cols), 1/3)  # uniform initial belief
-        self.path = [tuple(self.pos)]
+        self.belief = np.full((rows, cols), 1/3)
+        self.path = []
+        self.update_position()
+
+    def update_position(self):
+        offset = self.radius * np.array([np.sin(self.angle), np.cos(self.angle)])
+        pos = self.center + offset
+        self.pos = np.clip(pos, [0, 0], [rows - 1, cols - 1])
+        self.path.append(tuple(self.pos.astype(int)))
 
     def move(self):
-        directions = [(i, j) for i in [-1, 0, 1] for j in [-1, 0, 1]]
-        dr, dc = random.choice(directions)
-        new_pos = self.pos + np.array([dr, dc])
-        self.pos = np.clip(new_pos, [0, 0], [rows-1, cols-1])
-        self.path.append(tuple(self.pos))
+        self.angle += self.direction * 0.05
+        self.update_position()
 
     def observe(self, env_grid):
-        center_r, center_c = self.pos
+        center_r, center_c = self.pos.astype(int)
         for dr in range(-self.cam_h // 2, self.cam_h // 2 + 1):
             for dc in range(-self.cam_w // 2, self.cam_w // 2 + 1):
                 r = center_r + dr
@@ -88,9 +84,6 @@ class UAVAgent:
                     else:
                         obs = random.choice(
                             [s for s in ["healthy", "onfire", "burnt"] if s != true_state])
-                    print(f"  cell ({r},{c}): true={true_state}, obs={obs}")
-                    
-                    # Approximate Bayesian update: crude method
                     if obs == "healthy":
                         self.belief[r][c] = 0.9
                     elif obs == "onfire":
@@ -98,13 +91,17 @@ class UAVAgent:
                     else:
                         self.belief[r][c] = 0.1
 
-# --- Initialize agents ---
-agents = [
-    UAVAgent(pos=(5, 5)),
-    UAVAgent(pos=(15, 5)),
-    UAVAgent(pos=(5, 20)),
-    UAVAgent(pos=(20, 20))
-]
+def share_beliefs(agents):
+    for i in range(len(agents)):
+        for j in range(i + 1, len(agents)):
+            dist = np.linalg.norm(agents[i].pos - agents[j].pos)
+            if dist < 2.0:
+                shared = (agents[i].belief + agents[j].belief) / 2
+                agents[i].belief = shared.copy()
+                agents[j].belief = shared.copy()
+
+# --- Initialize agents in circular paths ---
+agents = [UAVAgent(center=(12, 12), radius=8, angle=np.pi/2 * i, direction=1) for i in range(2)] + [UAVAgent(center=(12, 12), radius=8, angle=np.pi/2 * i, direction=-1) for i in range(2, 4)]
 
 # --- Main loop ---
 tick = 0
@@ -114,17 +111,15 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Update wildfire every 10 frames
     if tick % 10 == 0:
-        grid = update_grid(wind_vector=(1, 0))  # wind blowing down
+        grid = update_grid(wind_vector=(0, 0))
 
-    # Update agents
-    for agent in agents:
-        if tick % 20 == 0:  # slower update rate for agents
+    if tick % 5 == 0:
+        for agent in agents:
             agent.move()
-        agent.observe(grid)
+            agent.observe(grid)
+        share_beliefs(agents)
 
-    # Draw background grid
     screen.fill((200, 200, 200))
     for row in range(rows):
         for col in range(cols):
@@ -134,9 +129,7 @@ while running:
             pygame.draw.rect(screen, color, rect)
             pygame.draw.rect(screen, (0, 0, 0), rect, 1)
 
-    # Draw agents and their paths
     for agent in agents:
-        # Draw path
         for i in range(1, len(agent.path)):
             r1, c1 = agent.path[i - 1]
             r2, c2 = agent.path[i]
@@ -145,11 +138,10 @@ while running:
                 (c1 * cell_size + cell_size // 2, r1 * cell_size + cell_size // 2),
                 (c2 * cell_size + cell_size // 2, r2 * cell_size + cell_size // 2), 2
             )
-        # Draw agent
         ar, ac = agent.pos
         pygame.draw.circle(
             screen, (0, 0, 255),
-            (ac * cell_size + cell_size // 2, ar * cell_size + cell_size // 2),
+            (int(ac * cell_size + cell_size // 2), int(ar * cell_size + cell_size // 2)),
             cell_size // 3
         )
 
