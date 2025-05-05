@@ -18,13 +18,19 @@ STATE_COLORS = {
 
 alpha = 0.5 # for setting on fire
 beta = 0.8 # for remaining on fire/turning burnt
-wind_vector = (0, 0, 1)
+wind_vector = (1, 0, 1)
+
+# Shared patrol parameters
+patrol_center = np.array([12, 12], dtype=float)
+patrol_radius = 8
+
 
 grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
 grid[10:15, 10:15] = 'onfire'
 grid[12:13, 12:13] = 'burnt'
 
 def update_grid(wind_vector):
+    '''Updates wildfire spread'''
     new_grid = grid.copy()
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
     # Normalize direction
@@ -64,6 +70,7 @@ def update_grid(wind_vector):
     return new_grid
 
 class UAVAgent:
+    '''Initialize UAV Agents'''
     def __init__(self, center, radius, angle, direction=1, cam_size=(5, 5), pc=0.8):
         self.center = np.array(center)
         self.radius = radius
@@ -77,15 +84,16 @@ class UAVAgent:
 
     def update_position(self):
         offset = self.radius * np.array([np.sin(self.angle), np.cos(self.angle)])
-        pos = self.center + offset
-        self.pos = np.clip(pos, [0, 0], [rows - 1, cols - 1])
+        self.pos = np.clip(self.center + offset, [0, 0], [rows - 1, cols - 1])
         self.path.append(tuple(self.pos.astype(int)))
 
     def move(self):
+        '''Move UAV in circular direction'''
         self.angle += self.direction * 0.05
         self.update_position()
 
     def observe(self, env_grid):
+        '''Determine UAV observation'''
         center_r, center_c = self.pos.astype(int)
         for dr in range(-self.cam_h // 2, self.cam_h // 2 + 1):
             for dc in range(-self.cam_w // 2, self.cam_w // 2 + 1):
@@ -106,6 +114,7 @@ class UAVAgent:
                         self.belief[r][c] = 0.1
 
 def share_beliefs(agents):
+    '''Share UAV beliefs when in close proximity'''
     for i in range(len(agents)):
         for j in range(i + 1, len(agents)):
             dist = np.linalg.norm(agents[i].pos - agents[j].pos)
@@ -115,13 +124,13 @@ def share_beliefs(agents):
                 agents[j].belief = shared.copy()
 
 # --- Create N UAVs evenly spaced around the fire center ---
-num_uavs = 8  # total UAVs
+num_uavs = 2  # total UAVs
 agents = []
 for i in range(num_uavs):
-    angle = 2 * np.pi * i / num_uavs
-    direction = 1 if i < num_uavs / 2 else -1  # first half go CW, second half go CCW
-    agent = UAVAgent(center=(12, 12), radius=8, angle=angle, direction=direction)
-    agents.append(agent)
+    direction = 1 if i < num_uavs // 2 else -1
+    angle = 2 * np.pi * i / num_uavs  # evenly spaced
+    agents.append(UAVAgent(center=patrol_center, radius=patrol_radius, angle=angle, direction=direction))
+
 
 # --- Main loop ---
 tick = 0
@@ -134,7 +143,7 @@ while running:
     if tick % 10 == 0:
         grid = update_grid(wind_vector) # CHANGE WIND DIRECTION AND SPEED HERE ((direction), speed)
                                                     # 
-
+    
     if tick % 5 == 0:
         for agent in agents:
             agent.move()
