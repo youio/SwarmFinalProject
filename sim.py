@@ -16,8 +16,9 @@ STATE_COLORS = {
     "burnt": (31, 15, 11)
 }
 
-alpha = 0.6
-beta = 0.8
+alpha = 0.5 # for setting on fire
+beta = 0.8 # for remaining on fire/turning burnt
+wind_vector = (0, 0, 1)
 
 grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
 grid[10:15, 10:15] = 'onfire'
@@ -50,7 +51,7 @@ def update_grid(wind_vector):
 
                         print(f"projection: " + str(proj))
 
-                        prob_wind_effect = alpha * max(0.2, (1 + proj) * wind_speed) # if proj > 0, wind helps spread. if proj < 0, wind doesn't. pw_f never goes below 0.2
+                        prob_wind_effect = alpha * max(0.4, (1 + proj) * wind_speed) # if proj > 0, wind helps spread. if proj < 0, wind doesn't. pw_f never goes below 0.2
                         total_prob += prob_wind_effect # spread probability
 
                         print(f"total_prob: " + str(total_prob))
@@ -113,8 +114,14 @@ def share_beliefs(agents):
                 agents[i].belief = shared.copy()
                 agents[j].belief = shared.copy()
 
-# --- Initialize agents in circular paths ---
-agents = [UAVAgent(center=(12, 12), radius=8, angle=np.pi/2 * i, direction=1) for i in range(2)] + [UAVAgent(center=(12, 12), radius=8, angle=np.pi/2 * i, direction=-1) for i in range(2, 4)]
+# --- Create N UAVs evenly spaced around the fire center ---
+num_uavs = 8  # total UAVs
+agents = []
+for i in range(num_uavs):
+    angle = 2 * np.pi * i / num_uavs
+    direction = 1 if i < num_uavs / 2 else -1  # first half go CW, second half go CCW
+    agent = UAVAgent(center=(12, 12), radius=8, angle=angle, direction=direction)
+    agents.append(agent)
 
 # --- Main loop ---
 tick = 0
@@ -125,7 +132,7 @@ while running:
             running = False
 
     if tick % 10 == 0:
-        grid = update_grid(wind_vector=(0, 0, 10)) # CHANGE WIND DIRECTION AND SPEED HERE ((direction), speed)
+        grid = update_grid(wind_vector) # CHANGE WIND DIRECTION AND SPEED HERE ((direction), speed)
                                                     # 
 
     if tick % 5 == 0:
