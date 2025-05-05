@@ -16,8 +16,8 @@ STATE_COLORS = {
     "burnt": (31, 15, 11)
 }
 
-alpha = 0.4
-beta = 0.6
+alpha = 0.6
+beta = 0.8
 
 grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
 grid[10:15, 10:15] = 'onfire'
@@ -26,8 +26,15 @@ grid[12:13, 12:13] = 'burnt'
 def update_grid(wind_vector):
     new_grid = grid.copy()
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    wind_vector = np.array(wind_vector, dtype=float)
-    wind_vector /= np.linalg.norm(wind_vector) + 1e-8
+    # Normalize direction
+    wind_direction = np.array(wind_vector[:2], dtype=float)
+    wind_direction /= np.linalg.norm(wind_direction) + 1e-8
+
+    # Extract wind speed
+    wind_speed = wind_vector[2]
+
+    if(wind_vector[:2] == (0,0)): # if no wind, set wind speed to 0
+        wind_speed = 0
 
     for r in range(rows):
         for c in range(cols):
@@ -37,15 +44,21 @@ def update_grid(wind_vector):
                 for dr, dc in directions:
                     nr, nc = r + dr, c + dc
                     if 0 <= nr < rows and 0 <= nc < cols and grid[nr][nc] == "onfire":
-                        u = np.array([dr, dc], dtype=float)
-                        u /= np.linalg.norm(u) + 1e-8
-                        proj = np.dot(wind_vector, u)
-                        pw_f = alpha * (1 + proj)
-                        total_prob += pw_f
-                if random.random() < total_prob:
+                        u = np.array([dr, dc], dtype=float) 
+                        u /= np.linalg.norm(u) + 1e-8 # direction from neighbor to current cell
+                        proj = np.dot(wind_direction, u) # how wind aligns in cell's direction
+
+                        print(f"projection: " + str(proj))
+
+                        prob_wind_effect = alpha * max(0.2, (1 + proj) * wind_speed) # if proj > 0, wind helps spread. if proj < 0, wind doesn't. pw_f never goes below 0.2
+                        total_prob += prob_wind_effect # spread probability
+
+                        print(f"total_prob: " + str(total_prob))
+
+                if random.random() < total_prob: # set fire if spread probability is high enough
                     new_grid[r][c] = "onfire"
             elif state == "onfire":
-                if random.random() > beta:
+                if random.random() > beta: # burnt if greater than threshold beta
                     new_grid[r][c] = "burnt"
     return new_grid
 
@@ -112,7 +125,8 @@ while running:
             running = False
 
     if tick % 10 == 0:
-        grid = update_grid(wind_vector=(0, 0))
+        grid = update_grid(wind_vector=(0, 0, 10)) # CHANGE WIND DIRECTION AND SPEED HERE ((direction), speed)
+                                                    # 
 
     if tick % 5 == 0:
         for agent in agents:
