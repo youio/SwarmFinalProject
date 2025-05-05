@@ -12,12 +12,10 @@ cell_size = 30
 screen = pygame.display.set_mode((cols*cell_size, rows*cell_size))
 clock = pygame.time.Clock()
 
-
-
 # Define some state colors
 STATE_COLORS = {
     "healthy": (52, 110, 43),
-    "onfire": (237, 117, 57),
+    "onfire": (214, 45, 45),
     "burnt": (31, 15, 11)
 }
 
@@ -25,8 +23,11 @@ STATE_COLORS = {
 grid = np.array([
     ["healthy" for _ in range(cols)] for _ in range(rows)
 ])
+
 grid[8:17,8:17] = 'onfire'
 grid[10:15,10:15] = 'burnt'
+
+
 # --- Main loop ---
 running = True
 while running:
