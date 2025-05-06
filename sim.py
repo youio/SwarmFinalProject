@@ -97,6 +97,7 @@ def update_grid(grid, wind_vector):
 
 def share_beliefs(agents):
     '''Share fire beliefs between agents that are close to each other.'''
+    meeting_count = 0
     for i in range(len(agents)):
         for j in range(i + 1, len(agents)):
             dist = np.linalg.norm(agents[i].pos - agents[j].pos)
@@ -105,9 +106,12 @@ def share_beliefs(agents):
                 fire2 = np.where(agents[j].belief == 'onfire')
                 agents[i].belief[fire2] = 'onfire'
                 agents[j].belief[fire1] = 'onfire'
+                meeting_count += 1
+    return meeting_count
 
 def sim_step(tick, agents, grid, wind_vector):
     '''Performs one step of the simulation.'''
+    meeting_count = 0
     if tick % 10 == 0:
         grid = update_grid(grid, wind_vector)
 
@@ -115,10 +119,10 @@ def sim_step(tick, agents, grid, wind_vector):
         for agent in agents:
             agent.move(grid)
             agent.observe(grid)
-        share_beliefs(agents)
-    return grid
+        meeting_count = share_beliefs(agents)
+    return grid, meeting_count
 
-def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
+def runsim(timesteps=500, num_uavs=6, wind_vector=(1, 1, 0.5), render=True):
     '''
     Runs the wildfire simulation.
     
@@ -130,6 +134,7 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
     Returns:
         Average front coverage observed by representative UAV
     '''
+
     # Create environment grid
     grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
     grid[10:15, 10:15] = 'onfire'
@@ -141,8 +146,8 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
         clock = pygame.time.Clock()
 
     # Initialize UAVs around center
-    center = (13, 13)
-    radius = 2.5
+    center = (12, 12)
+    radius = 3.5
     cx, cy = center
     agents = []
 
@@ -224,6 +229,120 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
         pygame.quit()
 
     return np.mean(coverages)
+
+def runsim_meetings(timesteps=500, num_uavs=10, wind_vector=(1, 1, 0.5), render=True):
+    '''
+    Runs the wildfire simulation and returns coverage after each meeting.
+
+    Args:
+        timesteps: number of ticks to simulate
+        num_uavs: number of UAV agents
+        wind_vector: (dx, dy, speed) tuple for wind
+        render: whether to visualize the simulation in real-time
+
+    Returns:
+        List of (meeting_count, front_coverage) tuples.
+    '''
+    grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
+    grid[10:15, 10:15] = 'onfire'
+    grid[12:13, 12:13] = 'burnt'
+
+    if render:
+        pygame.init()
+        screen = pygame.display.set_mode((cols * cell_size, rows * cell_size))
+        clock = pygame.time.Clock()
+
+    center = (12, 12)
+    radius = 3.5
+    cx, cy = center
+    agents = []
+
+    for i in range(num_uavs):
+        angle = 2 * math.pi * i / num_uavs
+        if angle < math.pi / 4 or angle >= 7 * math.pi / 4:
+            orientation = 0
+        elif angle < 3 * math.pi / 4:
+            orientation = 1
+        elif angle < 5 * math.pi / 4:
+            orientation = 2
+        else:
+            orientation = 3
+
+        rotation = 1 if i % 2 == 0 else -1
+        if rotation == -1:
+            orientation = (orientation + 2) % 4
+
+        x = cx + radius * math.cos(angle)
+        y = cy + radius * math.sin(angle)
+        grid_x, grid_y = round(x), round(y)
+        agents.append(UAVAgent(init_pos=np.array([grid_x, grid_y]), rotation=rotation, orientation=orientation))
+
+    for agent in agents:
+        agent.belief = grid.copy()
+
+    representative = agents[0]
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+    tick = 0
+    running = True
+    meeting_count = 0
+    coverage_per_meeting = []
+
+    while tick <= timesteps and running:
+        if render:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                    running = False
+
+        if tick % 10 == 0:
+            grid = update_grid(grid, wind_vector)
+
+        if tick % 5 == 0:
+            for agent in agents:
+                agent.move(grid)
+                agent.observe(grid)
+
+            # Calculate current fire front
+            front = []
+            fires = np.array(np.where(grid == 'onfire')).T
+            for fire in fires:
+                if np.sum([grid[max(min(fire[0] + d[0], cols - 1), 0), max(min(fire[1] + d[1], cols - 1), 0)] == 'healthy' for d in directions]) > 0:
+                    front.append(fire)
+
+            # If a meeting occurred, log front coverage
+            if share_beliefs(agents):
+                meeting_count += 1
+                if front:
+                    front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
+                    coverage_per_meeting.append((meeting_count, front_coverage))
+
+        # Render environment and UAVs
+        if render:
+            screen.fill((200, 200, 200))
+            for row in range(rows):
+                for col in range(cols):
+                    state = grid[row][col]
+                    color = STATE_COLORS.get(state, (128, 128, 128))
+                    rect = pygame.Rect(col * cell_size, row * cell_size, cell_size, cell_size)
+                    pygame.draw.rect(screen, color, rect)
+                    pygame.draw.rect(screen, (0, 0, 0), rect, 1)
+
+            for agent in agents:
+                ar, ac = agent.pos
+                pygame.draw.circle(screen, (0, 0, 255),
+                                   (int(ac * cell_size + cell_size // 2), int(ar * cell_size + cell_size // 2)),
+                                   cell_size // 3)
+
+            pygame.display.flip()
+            clock.tick(30)
+
+        tick += 1
+
+    if render:
+        pygame.quit()
+
+    return coverage_per_meeting
+
 
 
 def wind_speed_experiment():
@@ -369,5 +488,24 @@ if __name__ == '__main__':
     # wind_speed_experiment()
     # swarm_size_experiment()
     # wind_direction_experiment()
-    swarmsize_windspeed_experiment()
+    # swarmsize_windspeed_experiment()
+
+    num_uavs = 4
+    cov_per_meet = runsim_meetings(num_uavs=4, render=False)
+    print(cov_per_meet)
+
+    # Unpack meeting numbers and coverage values
+    meetings, coverages = zip(*cov_per_meet) if cov_per_meet else ([], [])
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    plt.plot(meetings, coverages, marker='o', linestyle='-')
+    plt.xlabel('Meeting Number')
+    plt.ylabel('Front Coverage')
+    plt.title(f"Fire Front Coverage at Each Meeting; UAV count = {num_uavs}")
+    plt.grid(True)
+    plt.ylim(0, 1)  # since coverage is between 0 and 1
+    plt.tight_layout()
+    plt.show()
+
     # runsim(render=True) # to see visualization, set render=True
