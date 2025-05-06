@@ -8,28 +8,34 @@ import matplotlib.pyplot as plt
 rows, cols = 25, 25
 cell_size = 30
 
+# Define color for each fire state
 STATE_COLORS = {
     "healthy": (52, 110, 43),
     "onfire": (214, 45, 45),
     "burnt": (31, 15, 11)
 }
 
-alpha = 0.07  # for setting on fire
-beta = 1  # for remaining on fire/turning burnt
-wind_vector = (1, 1, 0.5)
+alpha = 0.07  # Probability base for catching fire
+beta = 1      # Probability of staying on fire before burning out
+wind_vector = (1, 1, 0.5)  # Default wind direction and strength
 
 class UAVAgent():
+    '''
+    UAV agent that moves in a direction, observes its surroundings,
+    and updates its belief about the fire state of cells.
+    '''
     def __init__(self, init_pos, rotation, orientation, pc=0.95):
         self.pos = init_pos
-        self.rotation = rotation
-        self.orientations = np.array([(-1, 0), (0, 1), (1, 0), (0, -1)])
+        self.rotation = rotation  # 1 for clockwise, -1 for counterclockwise
+        self.orientations = np.array([(-1, 0), (0, 1), (1, 0), (0, -1)])  # N, E, S, W
         self.ori = orientation
         self.belief = None
         self.path = []
-        self.pc = pc
-        self.cam_h, self.cam_w = (3, 3)
+        self.pc = pc  # Probability of correct observation
+        self.cam_h, self.cam_w = (3, 3)  # Camera size
 
     def move(self, env_grid):
+        '''Moves the UAV according to fire state and turning logic.'''
         o = self.ori
         r = self.rotation
         forward_pos = self.orientations[o] + self.pos
@@ -45,6 +51,7 @@ class UAVAgent():
                 self.pos += self.orientations[o]
 
     def observe(self, env_grid):
+        '''UAV observes its 3x3 neighborhood and updates its belief.'''
         r_center, c_center = self.pos
         for dr in range(-self.cam_h // 2, self.cam_h // 2 + 1):
             for dc in range(-self.cam_w // 2, self.cam_w // 2 + 1):
@@ -55,12 +62,14 @@ class UAVAgent():
                     self.belief[r, c] = obs
 
 def in_bounds(pos, grid_shape):
+    '''Check if a position is within the grid bounds.'''
     x, y = pos
     return 0 <= x < grid_shape[0] and 0 <= y < grid_shape[1]
 
 def update_grid(grid, wind_vector):
+    '''Update the environment grid based on fire spread and wind.'''
     new_grid = grid.copy()
-    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # N, S, W, E
 
     wind_direction = np.array(wind_vector[:2], dtype=float)
     wind_direction /= np.linalg.norm(wind_direction) + 1e-8
@@ -87,6 +96,7 @@ def update_grid(grid, wind_vector):
     return new_grid
 
 def share_beliefs(agents):
+    '''Share fire beliefs between agents that are close to each other.'''
     for i in range(len(agents)):
         for j in range(i + 1, len(agents)):
             dist = np.linalg.norm(agents[i].pos - agents[j].pos)
@@ -96,7 +106,8 @@ def share_beliefs(agents):
                 agents[i].belief[fire2] = 'onfire'
                 agents[j].belief[fire1] = 'onfire'
 
-def sim_step(tick, agents, grid):
+def sim_step(tick, agents, grid, wind_vector):
+    '''Performs one step of the simulation.'''
     if tick % 10 == 0:
         grid = update_grid(grid, wind_vector)
 
@@ -108,6 +119,18 @@ def sim_step(tick, agents, grid):
     return grid
 
 def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
+    '''
+    Runs the wildfire simulation.
+    
+    Args:
+        timesteps: number of ticks to simulate
+        num_uavs: number of UAV agents
+        wind_vector: (dx, dy, speed) tuple for wind
+        render: whether to visualize the simulation in real-time
+    Returns:
+        Average front coverage observed by representative UAV
+    '''
+    # Create environment grid
     grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
     grid[10:15, 10:15] = 'onfire'
     grid[12:13, 12:13] = 'burnt'
@@ -117,6 +140,7 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
         screen = pygame.display.set_mode((cols * cell_size, rows * cell_size))
         clock = pygame.time.Clock()
 
+    # Initialize UAVs around center
     center = (13, 13)
     radius = 2.5
     cx, cy = center
@@ -145,6 +169,7 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
     for agent in agents:
         agent.belief = grid.copy()
 
+    # Representative for measuring coverage
     representative = agents[0]
     coverages = []
     directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
@@ -156,9 +181,13 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    running = False
 
+        # Simulation step
         grid = sim_step(tick, agents, grid, wind_vector)
 
+        # Track front coverage
         front = []
         fires = np.array(np.where(grid == 'onfire')).T
         for fire in fires:
@@ -169,6 +198,7 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
             front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
             coverages.append(front_coverage)
 
+        # Render environment and UAVs
         if render:
             screen.fill((200, 200, 200))
             for row in range(rows):
@@ -195,17 +225,6 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
 
     return np.mean(coverages)
 
-# Overload sim_step to accept wind_vector as argument
-def sim_step(tick, agents, grid, wind_vector):
-    if tick % 10 == 0:
-        grid = update_grid(grid, wind_vector)
-
-    if tick % 5 == 0:
-        for agent in agents:
-            agent.move(grid)
-            agent.observe(grid)
-        share_beliefs(agents)
-    return grid
 
 def run_experiment_1():
     '''Experiment to test coverage spread with fixed direction, fixed swarm size, variable wind speed'''
@@ -308,7 +327,7 @@ def run_experiment_3():
 
 
 if __name__ == '__main__':
-    # run_experiment_1()
-    # run_experiment_2()
-    # run_experiment_3()
-    runsim(render=True) # to see visualization, set render=True
+    run_experiment_1()
+    run_experiment_2()
+    run_experiment_3()
+    # runsim(render=True) # to see visualization, set render=True
