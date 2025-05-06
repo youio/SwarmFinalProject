@@ -226,7 +226,7 @@ def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
     return np.mean(coverages)
 
 
-def run_experiment_1():
+def wind_speed_experiment():
     '''Experiment to test coverage spread with fixed direction, fixed swarm size, variable wind speed'''
     wind_speeds = [0.0, 0.5, 1.0, 1.5]
     trials = 5
@@ -256,9 +256,12 @@ def run_experiment_1():
     plt.tight_layout()
     plt.show()
 
-def run_experiment_2():
+def swarm_size_experiment():
     '''Experiment to test coverage with fixed wind speed and direction, increasing swarm size'''
-    uav_counts = [1, 2, 4, 8, 12]
+    uav_counts = []
+    for i in range(50):
+        uav_counts.append(i+1)
+    print(uav_counts)
     trials = 5
     wind_vec = (1, 1, 1.0)  # fixed wind
 
@@ -285,7 +288,7 @@ def run_experiment_2():
     plt.tight_layout()
     plt.show()
 
-def run_experiment_3():
+def wind_direction_experiment():
     '''Experiment to test coverage with fixed swarm and wind speed, varying wind direction'''
     wind_directions = [
         ((1, 0), "East"),
@@ -325,9 +328,46 @@ def run_experiment_3():
     plt.tight_layout()
     plt.show()
 
+def swarmsize_windspeed_experiment():
+    '''Experiment to test coverage with increasing swarm size and wind speed, fixed direction'''
+    uav_counts = []
+    for i in range(20):
+        uav_counts.append(i + 1)
+    trials = 5
+    wind_speeds = [0.0, 0.5, 1.0, 1.5, 2.0]
+    fixed_direction = (1, 0)
+
+    # Store mean results for each wind speed
+    wind_results = {ws: [] for ws in wind_speeds}
+
+    for ws in wind_speeds:
+        for n_uavs in uav_counts:
+            print(f"\nRunning with {n_uavs} UAVs at wind speed {ws}")
+            trial_results = []
+            for t in range(trials):
+                print(f"  Trial {t+1}")
+                cov = runsim(num_uavs=n_uavs, wind_vector=(fixed_direction[0], fixed_direction[1], ws), render=False)
+                trial_results.append(cov)
+            avg_cov = np.mean(trial_results)
+            wind_results[ws].append(avg_cov)
+
+    # Plot
+    plt.figure(figsize=(10, 6))
+    for ws in wind_speeds:
+        plt.plot(uav_counts, wind_results[ws], label=f"Wind Speed {ws} m/s")  # No capsize here!
+
+    plt.title("Coverage vs UAV Count at Different Wind Speeds")
+    plt.xlabel("Number of UAVs")
+    plt.ylabel("Average Front Coverage")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == '__main__':
-    run_experiment_1()
-    run_experiment_2()
-    run_experiment_3()
+    # wind_speed_experiment()
+    # swarm_size_experiment()
+    # wind_direction_experiment()
+    swarmsize_windspeed_experiment()
     # runsim(render=True) # to see visualization, set render=True
