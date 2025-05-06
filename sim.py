@@ -17,7 +17,7 @@ STATE_COLORS = {
 
 alpha = 0.07 # for setting on fire
 beta = 1 # for remaining on fire/turning burnt
-wind_vector = (-5, -1, 0.5)
+wind_vector = (1, 1, 0.5)
 
 # Shared patrol parameters
 patrol_center = np.array([12, 12], dtype=float)
@@ -160,6 +160,7 @@ def share_beliefs(agents):
     '''Share UAV beliefs when in close proximity'''
     for i in range(len(agents)):
         for j in range(i + 1, len(agents)):
+            print('pose', agents[i].pos, agents[j].pos)
             dist = np.linalg.norm(agents[i].pos - agents[j].pos)
             if dist < 2.0:
                 # shared = (agents[i].belief + agents[j].belief) / 2
@@ -177,9 +178,9 @@ clock = pygame.time.Clock()
 
 timesteps = 500
 center = (13, 13)
-radius = 2.5
+radius = 3.5
 cx,cy = center
-num_uavs = 2
+num_uavs = 5
 agents = []
 
 # Spawn agents
@@ -205,7 +206,7 @@ for i in range(num_uavs):
     x = cx + radius * math.cos(angle)
     y = cy + radius * math.sin(angle)
     grid_x, grid_y = round(x), round(y)
-    agents.append(UAVAgent(init_pos = [grid_x, grid_y], rotation=rotation,orientation=orientation ))
+    agents.append(UAVAgent(init_pos = np.array([grid_x, grid_y]), rotation=rotation,orientation=orientation ))
     
 representative = agents[0]
 
