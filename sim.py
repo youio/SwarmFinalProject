@@ -2,6 +2,7 @@ import pygame
 import numpy as np
 import random
 import math
+import matplotlib.pyplot as plt
 
 # --- Setup ---
 rows, cols = 25, 25
@@ -34,13 +35,14 @@ class UAVAgent():
         forward_pos = self.orientations[o] + self.pos
         side_pos = self.orientations[(o - r) % 4] + self.pos
 
-        if env_grid[tuple(forward_pos)] != 'healthy':
-            self.ori = (self.ori + r) % 4
-        elif env_grid[tuple(side_pos)] == 'healthy':
-            self.ori = (self.ori - r) % 4
-            self.pos += self.orientations[(o - r) % 4]
-        else:
-            self.pos += self.orientations[o]
+        if in_bounds(forward_pos, env_grid.shape):
+            if env_grid[tuple(forward_pos)] != 'healthy':
+                self.ori = (self.ori + r) % 4
+            elif env_grid[tuple(side_pos)] == 'healthy':
+                self.ori = (self.ori - r) % 4
+                self.pos += self.orientations[(o - r) % 4]
+            else:
+                self.pos += self.orientations[o]
 
     def observe(self, env_grid):
         r_center, c_center = self.pos
@@ -51,6 +53,10 @@ class UAVAgent():
                     true_state = env_grid[r][c]
                     obs = true_state if random.random() < self.pc else random.choice([s for s in ["healthy", "onfire", "burnt"] if s != true_state])
                     self.belief[r, c] = obs
+
+def in_bounds(pos, grid_shape):
+    x, y = pos
+    return 0 <= x < grid_shape[0] and 0 <= y < grid_shape[1]
 
 def update_grid(grid, wind_vector):
     new_grid = grid.copy()
@@ -101,14 +107,15 @@ def sim_step(tick, agents, grid):
         share_beliefs(agents)
     return grid
 
-def runsim(timesteps=500, num_uavs=2):
+def runsim(timesteps=500, num_uavs=2, wind_vector=(1, 1, 0.5), render=False):
     grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
     grid[10:15, 10:15] = 'onfire'
     grid[12:13, 12:13] = 'burnt'
 
-    pygame.init()
-    screen = pygame.display.set_mode((cols * cell_size, rows * cell_size))
-    clock = pygame.time.Clock()
+    if render:
+        pygame.init()
+        screen = pygame.display.set_mode((cols * cell_size, rows * cell_size))
+        clock = pygame.time.Clock()
 
     center = (13, 13)
     radius = 2.5
@@ -145,11 +152,12 @@ def runsim(timesteps=500, num_uavs=2):
     tick = 0
     running = True
     while tick <= timesteps and running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+        if render:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
 
-        grid = sim_step(tick, agents, grid)
+        grid = sim_step(tick, agents, grid, wind_vector)
 
         front = []
         fires = np.array(np.where(grid == 'onfire')).T
@@ -161,38 +169,146 @@ def runsim(timesteps=500, num_uavs=2):
             front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
             coverages.append(front_coverage)
 
-        screen.fill((200, 200, 200))
-        for row in range(rows):
-            for col in range(cols):
-                state = grid[row][col]
-                color = STATE_COLORS.get(state, (128, 128, 128))
-                rect = pygame.Rect(col * cell_size, row * cell_size, cell_size, cell_size)
-                pygame.draw.rect(screen, color, rect)
-                pygame.draw.rect(screen, (0, 0, 0), rect, 1)
+        if render:
+            screen.fill((200, 200, 200))
+            for row in range(rows):
+                for col in range(cols):
+                    state = grid[row][col]
+                    color = STATE_COLORS.get(state, (128, 128, 128))
+                    rect = pygame.Rect(col * cell_size, row * cell_size, cell_size, cell_size)
+                    pygame.draw.rect(screen, color, rect)
+                    pygame.draw.rect(screen, (0, 0, 0), rect, 1)
 
-        for agent in agents:
-            ar, ac = agent.pos
-            pygame.draw.circle(screen, (0, 0, 255),
-                               (int(ac * cell_size + cell_size // 2), int(ar * cell_size + cell_size // 2)),
-                               cell_size // 3)
+            for agent in agents:
+                ar, ac = agent.pos
+                pygame.draw.circle(screen, (0, 0, 255),
+                                   (int(ac * cell_size + cell_size // 2), int(ar * cell_size + cell_size // 2)),
+                                   cell_size // 3)
 
-        pygame.display.flip()
-        clock.tick(30)
+            pygame.display.flip()
+            clock.tick(30)
+
         tick += 1
 
-    print('Average coverage for this sim:', np.mean(coverages))
-    pygame.quit()
+    if render:
+        pygame.quit()
+
     return np.mean(coverages)
 
+# Overload sim_step to accept wind_vector as argument
+def sim_step(tick, agents, grid, wind_vector):
+    if tick % 10 == 0:
+        grid = update_grid(grid, wind_vector)
+
+    if tick % 5 == 0:
+        for agent in agents:
+            agent.move(grid)
+            agent.observe(grid)
+        share_beliefs(agents)
+    return grid
+
+def run_experiment_1():
+    '''Experiment to test coverage spread with fixed direction, fixed swarm size, variable wind speed'''
+    wind_speeds = [0.0, 0.5, 1.0, 1.5]
+    trials = 5
+    fixed_direction = (1, 1)
+    num_uavs = 4
+
+    means = []
+    stds = []
+
+    for speed in wind_speeds:
+        print(f"\nRunning for wind speed {speed}")
+        trial_results = []
+        for t in range(trials):
+            print(f"  Trial {t+1}")
+            cov = runsim(num_uavs=num_uavs, wind_vector=(fixed_direction[0], fixed_direction[1], speed), render=False)
+            trial_results.append(cov)
+        means.append(np.mean(trial_results))
+        stds.append(np.std(trial_results))
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    plt.errorbar(wind_speeds, means, yerr=stds, fmt='-o', capsize=5)
+    plt.title("Experiment 1: Coverage vs Wind Speed\nDirection = (1,1), 4 UAVs")
+    plt.xlabel("Wind Speed")
+    plt.ylabel("Average Front Coverage")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def run_experiment_2():
+    '''Experiment to test coverage with fixed wind speed and direction, increasing swarm size'''
+    uav_counts = [1, 2, 4, 8, 12]
+    trials = 5
+    wind_vec = (1, 1, 1.0)  # fixed wind
+
+    means = []
+    stds = []
+
+    for n_uavs in uav_counts:
+        print(f"\nRunning with {n_uavs} UAVs")
+        trial_results = []
+        for t in range(trials):
+            print(f"  Trial {t+1}")
+            cov = runsim(num_uavs=n_uavs, wind_vector=wind_vec, render=False)
+            trial_results.append(cov)
+        means.append(np.mean(trial_results))
+        stds.append(np.std(trial_results))
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    plt.errorbar(uav_counts, means, yerr=stds, fmt='-o', capsize=5)
+    plt.title("Experiment 2: Coverage vs Number of UAVs\nWind = (1,1), Speed = 1.0")
+    plt.xlabel("Number of UAVs")
+    plt.ylabel("Average Front Coverage")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+def run_experiment_3():
+    '''Experiment to test coverage with fixed swarm and wind speed, varying wind direction'''
+    wind_directions = [
+        ((1, 0), "East"),
+        ((0, 1), "South"),
+        ((-1, 0), "West"),
+        ((0, -1), "North"),
+        ((1, 1), "Southeast"),
+        ((-1, -1), "Northwest")
+    ]
+    wind_speed = 1.0
+    num_uavs = 4
+    trials = 5
+
+    means = []
+    stds = []
+    labels = []
+
+    for (direction, label) in wind_directions:
+        print(f"\nRunning with wind direction {label}")
+        trial_results = []
+        for t in range(trials):
+            print(f"  Trial {t+1}")
+            wind_vec = (direction[0], direction[1], wind_speed)
+            cov = runsim(num_uavs=num_uavs, wind_vector=wind_vec, render=False)
+            trial_results.append(cov)
+        means.append(np.mean(trial_results))
+        stds.append(np.std(trial_results))
+        labels.append(label)
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.errorbar(labels, means, yerr=stds, fmt='-o', capsize=5)
+    plt.title("Experiment 3: Coverage vs Wind Direction\nSpeed = 1.0, 4 UAVs")
+    plt.xlabel("Wind Direction")
+    plt.ylabel("Average Front Coverage")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == '__main__':
-    num_runs = 10
-    all_coverages = []
-
-    for i in range(num_runs):
-        print(f"--- Simulation {i+1} ---")
-        avg_coverage = runsim()
-        all_coverages.append(avg_coverage)
-
-    print("Coverages from each run:", all_coverages)
-    print("Average across all runs:", np.mean(all_coverages))
-
+    # run_experiment_1()
+    # run_experiment_2()
+    # run_experiment_3()
+    runsim(render=True) # to see visualization, set render=True
