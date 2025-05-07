@@ -226,8 +226,6 @@ def runsim(timesteps=500, num_uavs=6, wind_vector=(1, 1, 0.5), render=True):
 
     return np.mean(coverages)
 
-
-
 def wind_speed_experiment():
     '''Experiment to test coverage spread with fixed direction, fixed swarm size, variable wind speed'''
     wind_speeds = [0.0, 0.5, 1.0, 1.5]
@@ -474,10 +472,10 @@ def coverage_with_no_meetings():
     plt.show()
 
 if __name__ == '__main__':
-    # runsim(render=True) # to see visualization, set render=True
-    wind_speed_experiment()
+    runsim(render=True) # to see visualization, set render=True
+    # wind_speed_experiment()
     # swarm_size_experiment()
-    wind_direction_experiment()
-    swarmsize_windspeed_experiment()
+    # wind_direction_experiment()
+    # swarmsize_windspeed_experiment()
     # coverage_with_meetings()
     # coverage_with_no_meetings()
