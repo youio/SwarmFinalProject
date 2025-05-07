@@ -235,66 +235,29 @@ def wind_speed_experiment():
     fixed_direction = (1, 1)
     num_uavs = 4
 
-    means = []
-    stds = []
+    all_speeds = []
+    all_coverages = []
 
     for speed in wind_speeds:
         print(f"\nRunning for wind speed {speed}")
-        trial_results = []
         for t in range(trials):
             print(f"  Trial {t+1}")
             cov = runsim(num_uavs=num_uavs, wind_vector=(fixed_direction[0], fixed_direction[1], speed), render=False)
-            trial_results.append(cov)
-        means.append(np.mean(trial_results))
-        stds.append(np.std(trial_results))
+            all_speeds.append(speed)
+            all_coverages.append(cov)
 
-    # Plot
+    # Scatter Plot
     plt.figure(figsize=(8, 5))
-    plt.errorbar(wind_speeds, means, yerr=stds, fmt='-o', capsize=5)
-    plt.title("Experiment 1: Coverage vs Wind Speed\nDirection = (1,1), 4 UAVs")
+    plt.scatter(all_speeds, all_coverages, alpha=0.6)
+    plt.title("Coverage vs Wind Speed (All Trials)\nDirection = (1,1), 4 UAVs")
     plt.xlabel("Wind Speed")
-    plt.ylabel("Average Front Coverage")
+    plt.ylabel("Front Coverage per Trial")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
-# def swarm_size_experiment():
-#     '''Experiment to test coverage with fixed wind speed and direction, increasing swarm size'''
-#     uav_counts = []
-#     for i in range(50):
-#         uav_counts.append(i+1)
-#     print(uav_counts)
-#     trials = 5
-#     wind_vec = (1, 1, 1.0)  # fixed wind
-
-#     means = []
-#     stds = []
-
-#     for n_uavs in uav_counts:
-#         print(f"\nRunning with {n_uavs} UAVs")
-#         trial_results = []
-#         for t in range(trials):
-#             print(f"  Trial {t+1}")
-#             cov = runsim(num_uavs=n_uavs, wind_vector=wind_vec, render=False)
-#             trial_results.append(cov)
-#         means.append(np.mean(trial_results))
-#         stds.append(np.std(trial_results))
-
-#     # Plot
-#     plt.figure(figsize=(8, 5))
-#     plt.errorbar(uav_counts, means, yerr=stds, fmt='-o', capsize=5)
-#     plt.title("Coverage vs Number of UAVs\nWind = (1,1), Speed = 1.0")
-#     plt.xlabel("Number of UAVs")
-#     plt.ylabel("Average Front Coverage")
-#     plt.grid(True)
-#     plt.tight_layout()
-#     plt.show()
-
 def swarm_size_experiment():
     '''Experiment to test coverage with fixed wind speed and direction, increasing swarm size'''
-    import matplotlib.pyplot as plt
-    import numpy as np
-
     uav_counts = []
     for i in range(20):
         uav_counts.append(i+1)
@@ -336,64 +299,58 @@ def wind_direction_experiment():
     num_uavs = 4
     trials = 5
 
-    means = []
-    stds = []
-    labels = []
+    all_labels = []
+    all_coverages = []
 
     for (direction, label) in wind_directions:
         print(f"\nRunning with wind direction {label}")
-        trial_results = []
         for t in range(trials):
             print(f"  Trial {t+1}")
             wind_vec = (direction[0], direction[1], wind_speed)
             cov = runsim(num_uavs=num_uavs, wind_vector=wind_vec, render=False)
-            trial_results.append(cov)
-        means.append(np.mean(trial_results))
-        stds.append(np.std(trial_results))
-        labels.append(label)
+            all_labels.append(label)
+            all_coverages.append(cov)
 
-    # Plot
+    # Scatter Plot
     plt.figure(figsize=(10, 5))
-    plt.errorbar(labels, means, yerr=stds, fmt='-o', capsize=5)
-    plt.title("Experiment 3: Coverage vs Wind Direction\nSpeed = 1.0, 4 UAVs")
+    plt.scatter(all_labels, all_coverages, alpha=0.6)
+    plt.title("Coverage vs Wind Direction (All Trials)\nSpeed = 1.0, 4 UAVs")
     plt.xlabel("Wind Direction")
-    plt.ylabel("Average Front Coverage")
+    plt.ylabel("Front Coverage per Trial")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
 def swarmsize_windspeed_experiment():
     '''Experiment to test coverage with increasing swarm size and wind speed, fixed direction'''
-    uav_counts = []
-    for i in range(20):
-        uav_counts.append(i + 1)
+
+    uav_counts = list(range(1, 21))  # 1 to 20 UAVs
     trials = 5
     wind_speeds = [0.0, 0.5, 1.0, 1.5, 2.0]
     fixed_direction = (1, 0)
 
-    # Store mean results for each wind speed
-    wind_results = {ws: [] for ws in wind_speeds}
+    all_counts = []
+    all_coverages = []
+    all_speeds = []
 
     for ws in wind_speeds:
         for n_uavs in uav_counts:
             print(f"\nRunning with {n_uavs} UAVs at wind speed {ws}")
-            trial_results = []
             for t in range(trials):
                 print(f"  Trial {t+1}")
                 cov = runsim(num_uavs=n_uavs, wind_vector=(fixed_direction[0], fixed_direction[1], ws), render=False)
-                trial_results.append(cov)
-            avg_cov = np.mean(trial_results)
-            wind_results[ws].append(avg_cov)
+                all_counts.append(n_uavs)
+                all_coverages.append(cov)
+                all_speeds.append(ws)
 
-    # Plot
+    # Scatter Plot
     plt.figure(figsize=(10, 6))
-    for ws in wind_speeds:
-        plt.plot(uav_counts, wind_results[ws], label=f"Wind Speed {ws} m/s")  # No capsize here!
-
-    plt.title("Coverage vs UAV Count at Different Wind Speeds")
+    scatter = plt.scatter(all_counts, all_coverages, c=all_speeds, cmap='viridis', alpha=0.7)
+    cbar = plt.colorbar(scatter)
+    cbar.set_label('Wind Speed (m/s)')
+    plt.title("Coverage vs UAV Count (All Trials)\nColor = Wind Speed")
     plt.xlabel("Number of UAVs")
-    plt.ylabel("Average Front Coverage")
-    plt.legend()
+    plt.ylabel("Front Coverage per Trial")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
@@ -518,9 +475,9 @@ def coverage_with_no_meetings():
 
 if __name__ == '__main__':
     # runsim(render=True) # to see visualization, set render=True
-    # wind_speed_experiment()
-    swarm_size_experiment()
-    # wind_direction_experiment()
-    # swarmsize_windspeed_experiment()
+    wind_speed_experiment()
+    # swarm_size_experiment()
+    wind_direction_experiment()
+    swarmsize_windspeed_experiment()
     # coverage_with_meetings()
     # coverage_with_no_meetings()
