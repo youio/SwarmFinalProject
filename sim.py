@@ -106,18 +106,6 @@ def share_beliefs(agents):
                 agents[i].belief[fire2] = 'onfire'
                 agents[j].belief[fire1] = 'onfire'
 
-# def sim_step(tick, agents, grid, wind_vector):
-#     '''Performs one step of the simulation.'''
-#     if tick % 10 == 0:
-#         grid = update_grid(grid, wind_vector)
-
-#     if tick % 5 == 0:
-#         for agent in agents:
-#             agent.move(grid)
-#             agent.observe(grid)
-#         meeting_count = share_beliefs(agents)
-#     return grid, meeting_count
-
 def sim_step(tick, agents, grid, wind_vector, meetings=True):
     '''Performs one step of the simulation.'''
     if tick % 10 == 0:
@@ -238,125 +226,6 @@ def runsim(timesteps=500, num_uavs=6, wind_vector=(1, 1, 0.5), render=True):
 
     return np.mean(coverages)
 
-def coverage_with_meetings():
-    '''Plots the swarm coverage over time with meetings enabled.'''
-    timesteps = 300
-    num_uavs = 6
-
-    coverages = []
-    def record_run():
-        # Custom runsim that returns coverage list
-        grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
-        grid[10:15, 10:15] = 'onfire'
-        grid[12:13, 12:13] = 'burnt'
-
-        center = (12, 12)
-        radius = 3.5
-        cx, cy = center
-        agents = []
-        for i in range(num_uavs):
-            angle = 2 * math.pi * i / num_uavs
-            orientation = int((angle / (math.pi / 2)) % 4)
-            rotation = 1 if i % 2 == 0 else -1
-            if rotation == -1:
-                orientation = (orientation + 2) % 4
-            x = cx + radius * math.cos(angle)
-            y = cy + radius * math.sin(angle)
-            grid_x, grid_y = round(x), round(y)
-            agents.append(UAVAgent(init_pos=np.array([grid_x, grid_y]), rotation=rotation, orientation=orientation))
-        for a in agents:
-            a.belief = grid.copy()
-        representative = agents[0]
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
-        coverage_log = []
-        for tick in range(timesteps + 1):
-            grid = sim_step(tick, agents, grid, wind_vector, meetings=True)
-            front = []
-            fires = np.array(np.where(grid == 'onfire')).T
-            for fire in fires:
-                if any(grid[max(min(fire[0] + d[0], cols - 1), 0), max(min(fire[1] + d[1], cols - 1), 0)] == 'healthy' for d in directions):
-                    front.append(fire)
-            if front:
-                front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
-                coverage_log.append(front_coverage)
-            else:
-                coverage_log.append(0)
-        return coverage_log
-
-    # Run multiple times to average
-    for _ in range(5):
-        coverages.append(record_run())
-    coverages = np.array(coverages)
-    mean_coverage = np.mean(coverages, axis=0)
-
-    plt.plot(mean_coverage, label='With Meetings')
-    plt.xlabel('Time Step')
-    plt.ylabel('Front Coverage')
-    plt.title('Swarm Coverage Over Time (With Meetings) with 6 UAVs')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
-
-def coverage_with_no_meetings():
-    '''Plots the swarm coverage over time with meetings disabled.'''
-    timesteps = 300
-    num_uavs = 6
-
-    coverages = []
-    def record_run():
-        grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
-        grid[10:15, 10:15] = 'onfire'
-        grid[12:13, 12:13] = 'burnt'
-
-        center = (12, 12)
-        radius = 3.5
-        cx, cy = center
-        agents = []
-        for i in range(num_uavs):
-            angle = 2 * math.pi * i / num_uavs
-            orientation = int((angle / (math.pi / 2)) % 4)
-            rotation = 1 if i % 2 == 0 else -1
-            if rotation == -1:
-                orientation = (orientation + 2) % 4
-            x = cx + radius * math.cos(angle)
-            y = cy + radius * math.sin(angle)
-            grid_x, grid_y = round(x), round(y)
-            agents.append(UAVAgent(init_pos=np.array([grid_x, grid_y]), rotation=rotation, orientation=orientation))
-        for a in agents:
-            a.belief = grid.copy()
-        representative = agents[0]
-        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-
-        coverage_log = []
-        for tick in range(timesteps + 1):
-            grid = sim_step(tick, agents, grid, wind_vector, meetings=False)
-            front = []
-            fires = np.array(np.where(grid == 'onfire')).T
-            for fire in fires:
-                if any(grid[max(min(fire[0] + d[0], cols - 1), 0), max(min(fire[1] + d[1], cols - 1), 0)] == 'healthy' for d in directions):
-                    front.append(fire)
-            if front:
-                front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
-                coverage_log.append(front_coverage)
-            else:
-                coverage_log.append(0)
-        return coverage_log
-
-    for _ in range(5):
-        coverages.append(record_run())
-    coverages = np.array(coverages)
-    mean_coverage = np.mean(coverages, axis=0)
-
-    plt.plot(mean_coverage, label='No Meetings', color='orange')
-    plt.xlabel('Time Step')
-    plt.ylabel('Front Coverage')
-    plt.title('Swarm Coverage Over Time (No Meetings) with 6 UAVs')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-
 
 
 def wind_speed_experiment():
@@ -389,34 +258,66 @@ def wind_speed_experiment():
     plt.tight_layout()
     plt.show()
 
+# def swarm_size_experiment():
+#     '''Experiment to test coverage with fixed wind speed and direction, increasing swarm size'''
+#     uav_counts = []
+#     for i in range(50):
+#         uav_counts.append(i+1)
+#     print(uav_counts)
+#     trials = 5
+#     wind_vec = (1, 1, 1.0)  # fixed wind
+
+#     means = []
+#     stds = []
+
+#     for n_uavs in uav_counts:
+#         print(f"\nRunning with {n_uavs} UAVs")
+#         trial_results = []
+#         for t in range(trials):
+#             print(f"  Trial {t+1}")
+#             cov = runsim(num_uavs=n_uavs, wind_vector=wind_vec, render=False)
+#             trial_results.append(cov)
+#         means.append(np.mean(trial_results))
+#         stds.append(np.std(trial_results))
+
+#     # Plot
+#     plt.figure(figsize=(8, 5))
+#     plt.errorbar(uav_counts, means, yerr=stds, fmt='-o', capsize=5)
+#     plt.title("Coverage vs Number of UAVs\nWind = (1,1), Speed = 1.0")
+#     plt.xlabel("Number of UAVs")
+#     plt.ylabel("Average Front Coverage")
+#     plt.grid(True)
+#     plt.tight_layout()
+#     plt.show()
+
 def swarm_size_experiment():
     '''Experiment to test coverage with fixed wind speed and direction, increasing swarm size'''
+    import matplotlib.pyplot as plt
+    import numpy as np
+
     uav_counts = []
-    for i in range(50):
+    for i in range(20):
         uav_counts.append(i+1)
-    print(uav_counts)
     trials = 5
     wind_vec = (1, 1, 1.0)  # fixed wind
 
-    means = []
-    stds = []
+    all_counts = []
+    all_coverages = []
 
     for n_uavs in uav_counts:
         print(f"\nRunning with {n_uavs} UAVs")
-        trial_results = []
         for t in range(trials):
             print(f"  Trial {t+1}")
             cov = runsim(num_uavs=n_uavs, wind_vector=wind_vec, render=False)
-            trial_results.append(cov)
-        means.append(np.mean(trial_results))
-        stds.append(np.std(trial_results))
+            all_counts.append(n_uavs)
+            all_coverages.append(cov)
 
-    # Plot
+    # Scatter Plot
     plt.figure(figsize=(8, 5))
-    plt.errorbar(uav_counts, means, yerr=stds, fmt='-o', capsize=5)
-    plt.title("Experiment 2: Coverage vs Number of UAVs\nWind = (1,1), Speed = 1.0")
+    plt.scatter(all_counts, all_coverages, alpha=0.6)
+    plt.title("Coverage vs Number of UAVs (All Trials)\nWind = (1,1), Speed = 1.0")
     plt.xlabel("Number of UAVs")
-    plt.ylabel("Average Front Coverage")
+    plt.ylabel("Front Coverage per Trial")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
@@ -497,12 +398,129 @@ def swarmsize_windspeed_experiment():
     plt.tight_layout()
     plt.show()
 
+def coverage_with_meetings():
+    '''Plots the swarm coverage over time with meetings enabled.'''
+    timesteps = 300
+    num_uavs = 6
+
+    coverages = []
+    def record_run():
+        # Custom runsim that returns coverage list
+        grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
+        grid[10:15, 10:15] = 'onfire'
+        grid[12:13, 12:13] = 'burnt'
+
+        center = (12, 12)
+        radius = 3.5
+        cx, cy = center
+        agents = []
+        for i in range(num_uavs):
+            angle = 2 * math.pi * i / num_uavs
+            orientation = int((angle / (math.pi / 2)) % 4)
+            rotation = 1 if i % 2 == 0 else -1
+            if rotation == -1:
+                orientation = (orientation + 2) % 4
+            x = cx + radius * math.cos(angle)
+            y = cy + radius * math.sin(angle)
+            grid_x, grid_y = round(x), round(y)
+            agents.append(UAVAgent(init_pos=np.array([grid_x, grid_y]), rotation=rotation, orientation=orientation))
+        for a in agents:
+            a.belief = grid.copy()
+        representative = agents[0]
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        coverage_log = []
+        for tick in range(timesteps + 1):
+            grid = sim_step(tick, agents, grid, wind_vector, meetings=True)
+            front = []
+            fires = np.array(np.where(grid == 'onfire')).T
+            for fire in fires:
+                if any(grid[max(min(fire[0] + d[0], cols - 1), 0), max(min(fire[1] + d[1], cols - 1), 0)] == 'healthy' for d in directions):
+                    front.append(fire)
+            if front:
+                front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
+                coverage_log.append(front_coverage)
+            else:
+                coverage_log.append(0)
+        return coverage_log
+
+    # Run multiple times to average
+    for _ in range(5):
+        coverages.append(record_run())
+    coverages = np.array(coverages)
+    mean_coverage = np.mean(coverages, axis=0)
+
+    plt.plot(mean_coverage, label='With Meetings')
+    plt.xlabel('Time Step')
+    plt.ylabel('Front Coverage')
+    plt.title('Swarm Coverage Over Time (With Meetings) with 6 UAVs')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def coverage_with_no_meetings():
+    '''Plots the swarm coverage over time with meetings disabled.'''
+    timesteps = 300
+    num_uavs = 6
+
+    coverages = []
+    def record_run():
+        grid = np.array([["healthy" for _ in range(cols)] for _ in range(rows)])
+        grid[10:15, 10:15] = 'onfire'
+        grid[12:13, 12:13] = 'burnt'
+
+        center = (12, 12)
+        radius = 3.5
+        cx, cy = center
+        agents = []
+        for i in range(num_uavs):
+            angle = 2 * math.pi * i / num_uavs
+            orientation = int((angle / (math.pi / 2)) % 4)
+            rotation = 1 if i % 2 == 0 else -1
+            if rotation == -1:
+                orientation = (orientation + 2) % 4
+            x = cx + radius * math.cos(angle)
+            y = cy + radius * math.sin(angle)
+            grid_x, grid_y = round(x), round(y)
+            agents.append(UAVAgent(init_pos=np.array([grid_x, grid_y]), rotation=rotation, orientation=orientation))
+        for a in agents:
+            a.belief = grid.copy()
+        representative = agents[0]
+        directions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        coverage_log = []
+        for tick in range(timesteps + 1):
+            grid = sim_step(tick, agents, grid, wind_vector, meetings=False)
+            front = []
+            fires = np.array(np.where(grid == 'onfire')).T
+            for fire in fires:
+                if any(grid[max(min(fire[0] + d[0], cols - 1), 0), max(min(fire[1] + d[1], cols - 1), 0)] == 'healthy' for d in directions):
+                    front.append(fire)
+            if front:
+                front_coverage = np.sum([representative.belief[f[0], f[1]] == 'onfire' for f in front]) / len(front)
+                coverage_log.append(front_coverage)
+            else:
+                coverage_log.append(0)
+        return coverage_log
+
+    for _ in range(5):
+        coverages.append(record_run())
+    coverages = np.array(coverages)
+    mean_coverage = np.mean(coverages, axis=0)
+
+    plt.plot(mean_coverage, label='No Meetings', color='orange')
+    plt.xlabel('Time Step')
+    plt.ylabel('Front Coverage')
+    plt.title('Swarm Coverage Over Time (No Meetings) with 6 UAVs')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 if __name__ == '__main__':
+    # runsim(render=True) # to see visualization, set render=True
     # wind_speed_experiment()
-    # swarm_size_experiment()
+    swarm_size_experiment()
     # wind_direction_experiment()
     # swarmsize_windspeed_experiment()
-    # runsim(render=True) # to see visualization, set render=True
-    coverage_with_meetings()
-    coverage_with_no_meetings()
+    # coverage_with_meetings()
+    # coverage_with_no_meetings()
